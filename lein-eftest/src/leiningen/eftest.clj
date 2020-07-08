@@ -68,30 +68,30 @@
                           ~selectors)]
       ns#)))
 
-(defn- process-options
+(defn process-options
   [{:keys [report report-to-file] :as options}]
   ;; Use `or` as opposed to relying on the keyword's IFn to ensure we override
   ;; an explicit/accidental `nil`.
   ;;
   ;; Note, that we've duplicated the default reporter decision both here and in
   ;; `eftest.runner/run-tests`.
-  `(let [reporter# (or ~report eftest.report.progress/report)]
-     (cond-> (or ~options {})
-       (some? ~report-to-file)
-       (update :report eftest.report/report-to-file ~report-to-file))))
+  (let [reporter (or report eftest.report.progress/report)]
+    (cond-> (or options {})
+      (some? report-to-file)
+      (update :report eftest.report/report-to-file report-to-file))))
 
 (defn- testing-form [project namespaces selectors]
   (let [selectors (vec selectors)
-        ns-sym    (gensym "namespaces")]
+        ns-sym    (gensym "namespaces")
+        options   (:eftest project {})]
     `(let [~ns-sym              ~(form-for-select-namespaces namespaces selectors)
            _#                   (when (seq ~ns-sym) (apply require :reload ~ns-sym))
            selected-namespaces# ~(form-for-nses-selectors-match selectors ns-sym)
-           options#             ~(-> project :eftest process-options)
            summary#             (~form-for-suppressing-unselected-tests
                                  selected-namespaces# ~selectors
                                  #(eftest.runner/run-tests
                                    (eftest.runner/find-tests selected-namespaces#)
-                                   options#))
+                                   (process-options ~options)))
            exit-code#           (+ (:error summary#) (:fail summary#))]
        (if ~(= :leiningen (:eval-in project))
          exit-code#
